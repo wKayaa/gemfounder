@@ -269,19 +269,22 @@ class TokenScorer:
             logging.error(f"Error scoring social signals: {e}")
             return 0.3
     
-    def score_tokens(self, tokens: List[Dict]) -> List[Dict]:
+    def score_tokens(self, tokens: List[Dict], threshold: float = None) -> List[Dict]:
         """Score multiple tokens and sort by score"""
+        if threshold is None:
+            threshold = config.SCORE_THRESHOLD
+            
         scored_tokens = []
         
         for token in tokens:
             score = self.calculate_score(token)
-            if score >= config.SCORE_THRESHOLD:
+            if score >= threshold:
                 scored_tokens.append(token)
         
         # Sort by score (highest first)
         scored_tokens.sort(key=lambda x: x.get('score', 0), reverse=True)
         
-        logging.info(f"Scored {len(tokens)} tokens, {len(scored_tokens)} passed threshold of {config.SCORE_THRESHOLD}")
+        logging.info(f"Scored {len(tokens)} tokens, {len(scored_tokens)} passed threshold of {threshold}")
         return scored_tokens
     
     def get_score_explanation(self, token: Dict) -> str:

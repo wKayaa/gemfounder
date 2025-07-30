@@ -22,13 +22,33 @@ MIN_VOLUME_1H = 5000     # $5k minimum volume (reduced from $10k)
 MIN_VOLUME_GROWTH = 15   # 15% growth threshold (reduced from 30%)
 MIN_LIQUIDITY_LOCK = True
 
-# Multiple Market Cap Tiers for Different Strategies
-MARKET_CAP_TIERS = {
-    'micro_gems': {'min': 10000, 'max': 100000},      # $10k-$100k: High risk, high reward
-    'small_gems': {'min': 100000, 'max': 500000},     # $100k-$500k: Balanced risk/reward
-    'mid_gems': {'min': 500000, 'max': 2000000},      # $500k-$2M: Lower risk, steady growth
-    'trending': {'min': 50000, 'max': 5000000}        # $50k-$5M: For trending tokens
+# Risk Profile Configuration
+RISK_PROFILES = {
+    'conservative': {
+        'min_market_cap': 500000,      # $500k min
+        'max_market_cap': 10000000,    # $10M max
+        'min_volume_growth': 10,       # 10% growth
+        'score_threshold': 60,         # Higher threshold
+        'max_tokens_per_scan': 3       # Fewer notifications
+    },
+    'balanced': {
+        'min_market_cap': 100000,      # $100k min
+        'max_market_cap': 2000000,     # $2M max
+        'min_volume_growth': 15,       # 15% growth
+        'score_threshold': 45,         # Default threshold
+        'max_tokens_per_scan': 5       # Moderate notifications
+    },
+    'aggressive': {
+        'min_market_cap': 20000,       # $20k min (high risk)
+        'max_market_cap': 1000000,     # $1M max
+        'min_volume_growth': 5,        # 5% growth (lower barrier)
+        'score_threshold': 35,         # Lower threshold
+        'max_tokens_per_scan': 10      # More notifications
+    }
 }
+
+# Default risk profile (can be changed by user)
+ACTIVE_RISK_PROFILE = 'balanced'
 
 # Scoring Configuration
 SCORE_THRESHOLD = 45  # Reduced from 75 to find more opportunities

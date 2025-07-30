@@ -18,6 +18,11 @@ class TokenFilter:
             'passed_volume_growth': 0,
             'passed_all_filters': 0
         }
+        self.risk_profile = None
+    
+    def set_risk_profile(self, risk_profile: Dict):
+        """Set risk profile for this filtering session"""
+        self.risk_profile = risk_profile
     
     def apply_all_filters(self, tokens: List[Dict]) -> List[Dict]:
         """Apply all filtering criteria to token list"""
@@ -66,21 +71,25 @@ class TokenFilter:
             if not isinstance(market_cap, (int, float)) or market_cap <= 0:
                 return False
             
-            # Use adaptive market cap ranges based on token source and characteristics
-            min_cap = config.MIN_MARKET_CAP
-            max_cap = config.MAX_MARKET_CAP
+            # Use risk profile settings if available
+            if self.risk_profile:
+                min_cap = self.risk_profile['min_market_cap']
+                max_cap = self.risk_profile['max_market_cap']
+            else:
+                min_cap = config.MIN_MARKET_CAP
+                max_cap = config.MAX_MARKET_CAP
             
             # For trending tokens, be more lenient with caps
             source = token.get('source', '')
             if 'trending' in source.lower() or 'detailed' in source.lower():
                 min_cap = min_cap * 0.5  # Allow lower market cap for trending
-                max_cap = max_cap * 5    # Allow higher market cap for trending
+                max_cap = max_cap * 3    # Allow higher market cap for trending
             
             # For tokens with high volume growth, be more lenient
             price_change_24h = abs(token.get('price_change_24h', 0))
             if price_change_24h > 50:  # High volatility = potential gem
                 min_cap = min_cap * 0.3
-                max_cap = max_cap * 10
+                max_cap = max_cap * 5
             
             return min_cap <= market_cap <= max_cap
             
