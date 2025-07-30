@@ -13,23 +13,32 @@ POLYGONSCAN_API_URL = "https://api.polygonscan.com/api"
 SCAN_INTERVAL_SECONDS = 300  # 5 minutes
 REQUEST_TIMEOUT = 30
 MAX_RETRIES = 3
+ENABLE_MOCK_DATA = True  # Enable mock data when APIs are unavailable
 
 # Filtering Criteria
-MIN_MARKET_CAP = 100000  # $100k
-MAX_MARKET_CAP = 300000  # $300k
-MIN_VOLUME_1H = 10000    # $10k minimum volume in last hour
-MIN_VOLUME_GROWTH = 30   # 30% volume growth in 30 minutes
+MIN_MARKET_CAP = 50000   # $50k (reduced from $100k to catch more gems)
+MAX_MARKET_CAP = 1000000  # $1M (increased from $300k for more opportunities)
+MIN_VOLUME_1H = 5000     # $5k minimum volume (reduced from $10k)
+MIN_VOLUME_GROWTH = 15   # 15% growth threshold (reduced from 30%)
 MIN_LIQUIDITY_LOCK = True
 
+# Multiple Market Cap Tiers for Different Strategies
+MARKET_CAP_TIERS = {
+    'micro_gems': {'min': 10000, 'max': 100000},      # $10k-$100k: High risk, high reward
+    'small_gems': {'min': 100000, 'max': 500000},     # $100k-$500k: Balanced risk/reward
+    'mid_gems': {'min': 500000, 'max': 2000000},      # $500k-$2M: Lower risk, steady growth
+    'trending': {'min': 50000, 'max': 5000000}        # $50k-$5M: For trending tokens
+}
+
 # Scoring Configuration
-SCORE_THRESHOLD = 75  # Minimum score to trigger notification
+SCORE_THRESHOLD = 45  # Reduced from 75 to find more opportunities
 SCORE_WEIGHTS = {
-    'market_cap': 0.20,      # 20%
-    'volume_growth': 0.25,   # 25%
-    'liquidity_lock': 0.20,  # 20%
-    'contract_security': 0.15, # 15%
+    'market_cap': 0.15,      # 15% (reduced importance)
+    'volume_growth': 0.35,   # 35% (increased - most important for gems)
+    'liquidity_lock': 0.15,  # 15%
+    'contract_security': 0.10, # 10% (less strict for new tokens)
     'whale_activity': 0.10,  # 10%
-    'social_signals': 0.10   # 10%
+    'social_signals': 0.15   # 15% (increased for trending detection)
 }
 
 # Telegram Configuration
