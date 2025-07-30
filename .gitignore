@@ -1,0 +1,38 @@
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore config file with sensitive data
+config_local.py
+
+# Ignore data files
+*.json
+*.csv
+*.log
+
+# Ignore temporary files
+*.tmp
+*.temp
+.tmp/
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore environment files
+.env
+.venv/
+venv/
+env/
+
+# Ignore distribution files
+dist/
+build/
+*.egg-info/
