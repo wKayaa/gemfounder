@@ -10,11 +10,17 @@ BSCSCAN_API_KEY = ""        # Get from https://bscscan.com/apis
 ETHERSCAN_API_KEY = ""      # Get from https://etherscan.io/apis
 POLYGONSCAN_API_KEY = ""    # Get from https://polygonscan.com/apis
 
+# Risk Profile Selection ('conservative', 'balanced', 'aggressive')
+# - conservative: Higher market caps, stricter filters, fewer notifications
+# - balanced: Default settings, good balance of risk/reward
+# - aggressive: Lower market caps, more opportunities, higher risk
+RISK_PROFILE = "balanced"
+
 # Scanning Configuration (adjust as needed)
 SCAN_INTERVAL_SECONDS = 300   # 5 minutes
-SCORE_THRESHOLD = 75          # Minimum score to trigger notification
+SCORE_THRESHOLD = 45          # Minimum score to trigger notification (can be overridden by risk profile)
 
-# Market Cap Filters (in USD)
+# Market Cap Filters (in USD) - will be overridden by risk profile
 MIN_MARKET_CAP = 100000      # $100k
 MAX_MARKET_CAP = 300000      # $300k
 

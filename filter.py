@@ -18,6 +18,11 @@ class TokenFilter:
             'passed_volume_growth': 0,
             'passed_all_filters': 0
         }
+        self.risk_profile = None
+    
+    def set_risk_profile(self, risk_profile: Dict):
+        """Set risk profile for this filtering session"""
+        self.risk_profile = risk_profile
     
     def apply_all_filters(self, tokens: List[Dict]) -> List[Dict]:
         """Apply all filtering criteria to token list"""
@@ -66,7 +71,27 @@ class TokenFilter:
             if not isinstance(market_cap, (int, float)) or market_cap <= 0:
                 return False
             
-            return config.MIN_MARKET_CAP <= market_cap <= config.MAX_MARKET_CAP
+            # Use risk profile settings if available
+            if self.risk_profile:
+                min_cap = self.risk_profile['min_market_cap']
+                max_cap = self.risk_profile['max_market_cap']
+            else:
+                min_cap = config.MIN_MARKET_CAP
+                max_cap = config.MAX_MARKET_CAP
+            
+            # For trending tokens, be more lenient with caps
+            source = token.get('source', '')
+            if 'trending' in source.lower() or 'detailed' in source.lower():
+                min_cap = min_cap * 0.5  # Allow lower market cap for trending
+                max_cap = max_cap * 3    # Allow higher market cap for trending
+            
+            # For tokens with high volume growth, be more lenient
+            price_change_24h = abs(token.get('price_change_24h', 0))
+            if price_change_24h > 50:  # High volatility = potential gem
+                min_cap = min_cap * 0.3
+                max_cap = max_cap * 5
+            
+            return min_cap <= market_cap <= max_cap
             
         except Exception as e:
             logging.error(f"Error checking market cap for {token.get('symbol', 'unknown')}: {e}")
@@ -77,34 +102,79 @@ class TokenFilter:
         try:
             # Check 24h volume first
             volume_24h = token.get('volume_24h', 0)
-            if volume_24h < config.MIN_VOLUME_1H:  # Use same threshold for 24h
-                return False
-            
-            # Check 1h volume if available
             volume_1h = token.get('volume_1h', 0)
-            if volume_1h > 0 and volume_1h < config.MIN_VOLUME_1H:
-                return False
             
-            return True
+            # Adaptive volume threshold based on market cap
+            market_cap = token.get('market_cap', 0)
+            base_volume_threshold = config.MIN_VOLUME_1H
+            
+            # Lower volume requirements for smaller market caps
+            if market_cap < 500000:  # Under 500k market cap
+                base_volume_threshold = base_volume_threshold * 0.3
+            elif market_cap < 1000000:  # Under 1M market cap
+                base_volume_threshold = base_volume_threshold * 0.5
+            
+            # Check either 24h or 1h volume
+            if volume_24h >= base_volume_threshold:
+                return True
+            elif volume_1h > 0 and volume_1h >= (base_volume_threshold * 0.1):  # 1h volume should be ~1/24 of daily
+                return True
+            
+            # For trending tokens from good sources, be even more lenient
+            source = token.get('source', '')
+            if 'trending' in source.lower() or 'detailed' in source.lower():
+                if volume_24h >= (base_volume_threshold * 0.2):
+                    return True
+            
+            return False
             
         except Exception as e:
             logging.error(f"Error checking volume for {token.get('symbol', 'unknown')}: {e}")
             return False
     
     def _check_volume_growth(self, token: Dict) -> bool:
-        """Check if token shows positive volume growth"""
+        """Check if token shows positive momentum or growth potential"""
         try:
-            # If we have 1h price change, use that as proxy for volume growth
+            # Multiple indicators for growth potential
             price_change_1h = token.get('price_change_1h', 0)
+            price_change_24h = token.get('price_change_24h', 0)
+            price_change_7d = token.get('price_change_7d', 0)
             
-            # If no 1h data, check 24h change
-            if price_change_1h == 0:
-                price_change_24h = token.get('price_change_24h', 0)
-                # Be more lenient with 24h data
-                return price_change_24h > (config.MIN_VOLUME_GROWTH / 2)
+            # Check for positive momentum in any timeframe
+            growth_indicators = 0
             
-            # For 1h data, apply full threshold
-            return price_change_1h > config.MIN_VOLUME_GROWTH
+            # 1h growth
+            if price_change_1h > (config.MIN_VOLUME_GROWTH * 0.5):
+                growth_indicators += 2  # Short-term momentum is valuable
+            elif price_change_1h > 0:
+                growth_indicators += 1
+            
+            # 24h growth 
+            if price_change_24h > config.MIN_VOLUME_GROWTH:
+                growth_indicators += 2
+            elif price_change_24h > (config.MIN_VOLUME_GROWTH * 0.3):
+                growth_indicators += 1
+            
+            # 7d growth (for trending analysis)
+            if price_change_7d > (config.MIN_VOLUME_GROWTH * 2):
+                growth_indicators += 1
+            
+            # Check for recovery patterns (negative 7d but positive 24h)
+            if price_change_7d < 0 and price_change_24h > 20:
+                growth_indicators += 2  # Recovery plays can be gems
+            
+            # Special conditions for very new or trending tokens
+            source = token.get('source', '')
+            if 'trending' in source.lower():
+                growth_indicators += 1  # Trending tokens get bonus points
+            
+            # Market cap consideration - smaller caps need less growth to be interesting
+            market_cap = token.get('market_cap', 0)
+            if market_cap < 200000 and price_change_24h > 10:  # Small cap with decent growth
+                growth_indicators += 1
+            
+            # Need at least 1 growth indicator to pass
+            return growth_indicators >= 1
             
         except Exception as e:
             logging.error(f"Error checking volume growth for {token.get('symbol', 'unknown')}: {e}")

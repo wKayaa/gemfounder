@@ -88,6 +88,9 @@ class GemFinderBot:
     def run_scan_cycle(self) -> Dict:
         """Run a single scan cycle"""
         try:
+            # Get active risk profile settings
+            risk_profile = config.RISK_PROFILES.get(config.ACTIVE_RISK_PROFILE, config.RISK_PROFILES['balanced'])
+            
             # Step 1: Scan for tokens
             self.logger.info("Scanning for new tokens...")
             tokens = self.scanner.scan_all_sources()
@@ -100,8 +103,9 @@ class GemFinderBot:
                     'notifications_sent': 0
                 }
             
-            # Step 2: Apply filters
-            self.logger.info(f"Applying filters to {len(tokens)} tokens...")
+            # Step 2: Apply filters with risk profile settings
+            self.logger.info(f"Applying filters to {len(tokens)} tokens using '{config.ACTIVE_RISK_PROFILE}' risk profile...")
+            self.filter.set_risk_profile(risk_profile)
             filtered_tokens = self.filter.apply_all_filters(tokens)
             
             if not filtered_tokens:
@@ -114,19 +118,23 @@ class GemFinderBot:
             
             # Step 3: Score tokens
             self.logger.info(f"Scoring {len(filtered_tokens)} filtered tokens...")
-            scored_tokens = self.scorer.score_tokens(filtered_tokens)
+            scored_tokens = self.scorer.score_tokens(filtered_tokens, risk_profile['score_threshold'])
             
             if not scored_tokens:
-                self.logger.info("No tokens passed scoring threshold")
+                self.logger.info(f"No tokens passed scoring threshold of {risk_profile['score_threshold']}")
                 return {
                     'tokens_scanned': len(tokens),
                     'tokens_filtered': len(filtered_tokens),
                     'notifications_sent': 0
                 }
             
-            # Step 4: Send notifications for new tokens
+            # Step 4: Limit notifications based on risk profile
+            max_notifications = risk_profile.get('max_tokens_per_scan', 5)
+            tokens_to_notify = scored_tokens[:max_notifications]
+            
+            # Step 5: Send notifications for new tokens
             notifications_sent = 0
-            for token in scored_tokens:
+            for token in tokens_to_notify:
                 if self.should_notify_token(token):
                     if self.send_token_notification(token):
                         notifications_sent += 1
@@ -136,6 +144,8 @@ class GemFinderBot:
                 'tokens_filtered': len(filtered_tokens),
                 'high_scoring_tokens': len(scored_tokens),
                 'notifications_sent': notifications_sent,
+                'risk_profile': config.ACTIVE_RISK_PROFILE,
+                'score_threshold': risk_profile['score_threshold'],
                 'top_tokens': scored_tokens[:5]  # Top 5 for summary
             }
             
@@ -224,17 +234,78 @@ class GemFinderBot:
 
 def main():
     """Main entry point"""
-    if len(sys.argv) > 1 and sys.argv[1] == "test":
+    import sys
+    
+    # Parse command line arguments
+    args = sys.argv[1:]
+    
+    # Check for help
+    if 'help' in args or '-h' in args or '--help' in args:
+        print_usage()
+        return
+    
+    # Check for risk profile setting
+    risk_profile = None
+    if '--conservative' in args:
+        risk_profile = 'conservative'
+        args.remove('--conservative')
+    elif '--balanced' in args:
+        risk_profile = 'balanced'
+        args.remove('--balanced')
+    elif '--aggressive' in args:
+        risk_profile = 'aggressive'
+        args.remove('--aggressive')
+    
+    # Set risk profile if specified
+    if risk_profile:
+        config.ACTIVE_RISK_PROFILE = risk_profile
+        print(f"Using {risk_profile} risk profile")
+    
+    if len(args) > 0 and args[0] == "test":
         # Run single test scan
         bot = GemFinderBot()
+        print(f"Running test scan with risk profile: {config.ACTIVE_RISK_PROFILE}")
         bot.run_single_scan()
     else:
         # Run continuous scanning
         bot = GemFinderBot()
+        print(f"Starting GemFinder Bot with risk profile: {config.ACTIVE_RISK_PROFILE}")
         try:
             bot.start()
         except KeyboardInterrupt:
             print("\nBot stopped by user")
+
+def print_usage():
+    """Print usage information"""
+    print("""
+GemFinder Bot - Advanced Crypto Gem Scanner
+
+Usage:
+  python3 main.py [options] [command]
+
+Commands:
+  test          Run a single test scan
+  (no command)  Run continuous scanning
+
+Risk Profile Options:
+  --conservative    Use conservative settings (safer, fewer alerts)
+  --balanced        Use balanced settings (default)
+  --aggressive      Use aggressive settings (higher risk, more opportunities)
+
+Risk Profile Details:
+  Conservative: $500k-$10M market cap, 60+ score threshold, max 3 alerts/scan
+  Balanced:     $100k-$2M market cap, 45+ score threshold, max 5 alerts/scan  
+  Aggressive:   $20k-$1M market cap, 35+ score threshold, max 10 alerts/scan
+
+Examples:
+  python3 main.py test --aggressive          # Test with aggressive profile
+  python3 main.py --conservative             # Run with conservative profile
+  python3 main.py test                       # Test with default profile
+
+Configuration:
+  Copy config_template.py to config_local.py and configure your API keys.
+  Telegram notifications require TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.
+    """)
 
 if __name__ == "__main__":
     main()
