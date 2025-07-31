@@ -299,6 +299,9 @@ class TokenScanner:
     def _parse_dexscreener_pair(self, pair: Dict) -> Optional[Dict]:
         """Parse DexScreener pair data into standardized format"""
         try:
+            if not pair:
+                return None
+                
             base_token = pair.get('baseToken', {})
             quote_token = pair.get('quoteToken', {})
             
