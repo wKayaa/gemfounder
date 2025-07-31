@@ -88,6 +88,32 @@ class TelegramNotifier:
                 truncated = truncate_address(contract_address)
                 message += f"📄 Contract: `{contract_address}`\n"
             
+            # Security analysis
+            security_analysis = token.get('security_analysis', {})
+            if security_analysis:
+                security_score = security_analysis.get('security_score', 0)
+                risk_level = security_analysis.get('risk_level', 'UNKNOWN')
+                recommendation = security_analysis.get('recommendation', 'Unknown')
+                
+                message += f"\n🛡️ *Security Analysis:*\n"
+                message += f"🔒 Security Score: *{security_score:.1f}/100*\n"
+                message += f"⚠️ Risk Level: *{risk_level}*\n"
+                message += f"💡 Recommendation: *{recommendation}*\n"
+                
+                # Add major risk factors if any
+                risk_factors = security_analysis.get('risk_factors', [])
+                if risk_factors:
+                    message += f"\n⚠️ *Risk Factors:*\n"
+                    for factor in risk_factors[:3]:  # Show top 3 risk factors
+                        message += f"• {factor}\n"
+                
+                # Add legitimacy factors if any
+                legitimacy_factors = security_analysis.get('legitimacy_factors', [])
+                if legitimacy_factors:
+                    message += f"\n✅ *Legitimacy Factors:*\n"
+                    for factor in legitimacy_factors[:3]:  # Show top 3 legitimacy factors
+                        message += f"• {factor}\n"
+            
             # Links
             message += "\n🔗 *Quick Links:*\n"
             
@@ -217,5 +243,14 @@ class TelegramNotifier:
         message += f"🔍 Scanning for gems between {format_currency(config.MIN_MARKET_CAP)} and {format_currency(config.MAX_MARKET_CAP)}\n"
         message += f"📊 Score threshold: {config.SCORE_THRESHOLD}/100\n"
         message += f"⏱️ Scan interval: {config.SCAN_INTERVAL_SECONDS}s"
+        
+        return self._send_message(message)
+    
+    def send_error_alert(self, error_message: str) -> bool:
+        """Send error alert to Telegram"""
+        message = f"🚨 *GemFinder Bot Alert* 🚨\n\n"
+        message += f"❌ *Error:* {error_message}\n"
+        message += f"⏰ {get_timestamp()}\n\n"
+        message += f"🔄 Bot will attempt to recover automatically\\."
         
         return self._send_message(message)
