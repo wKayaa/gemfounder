@@ -1,16 +1,19 @@
 # 💎 GemFinder - Crypto Gem Scanner Bot
 
-An intelligent Python bot that continuously scans for low market cap crypto tokens with high growth potential and sends detailed Telegram notifications when promising gems are discovered.
+# 💎 GemFinder - Advanced Crypto Gem Scanner Bot
 
-## 🎯 Features
+An intelligent Python bot that continuously scans for low market cap crypto tokens with high growth potential, featuring advanced rug pull detection and enhanced security analysis. Sends detailed Telegram notifications 24/7 when promising legitimate gems are discovered.
 
-- **Real-time Scanning**: Continuously monitors multiple blockchains (BSC, Ethereum, Polygon)
-- **Multi-API Integration**: Uses DexScreener, CoinGecko, and blockchain explorers
-- **Intelligent Filtering**: Market cap ($100k-$300k), volume, and growth filters
-- **Smart Scoring**: AI-powered scoring system (0-100) based on multiple criteria
-- **Telegram Alerts**: Detailed notifications with charts, links, and analysis
-- **Duplicate Prevention**: Tracks notified tokens to avoid spam
-- **Local Storage**: JSON-based storage for scan history and statistics
+## 🎯 Enhanced Features
+
+- **24/7 Continuous Operation**: Robust error handling and automatic recovery
+- **Advanced Rug Pull Detection**: Multi-layered security analysis to avoid scams
+- **Enhanced Token Discovery**: Multiple scanning sources including microcap gems
+- **Intelligent Risk Profiles**: Conservative, Balanced, and Aggressive modes
+- **Real-time Security Analysis**: Contract verification, liquidity analysis, and more
+- **Smart Anti-Scam Filtering**: Suspicious name detection and trading pattern analysis
+- **Adaptive Performance**: Dynamic wait times and error recovery
+- **Easy Telegram Setup**: Interactive setup script for bot configuration
 
 ## 🚀 Quick Start
 
@@ -28,7 +31,20 @@ pip install -r requirements.txt
 python setup.py
 ```
 
-### 2. Configuration
+### 2. Easy Telegram Setup (Recommended)
+
+```bash
+# Run the interactive setup script
+python3 telegram_setup.py
+```
+
+This will guide you through:
+- Creating a Telegram bot with @BotFather
+- Getting your bot token and chat ID
+- Automatic configuration file creation
+- Testing the setup
+
+### 2. Manual Configuration (Alternative)
 
 ```bash
 # Copy template and edit configuration
@@ -44,11 +60,37 @@ Fill in your Telegram bot credentials:
 
 ```bash
 # Test single scan
-python main.py test
+python3 main.py test
 
-# Start continuous scanning
-python main.py
+# Test with different risk profiles
+python3 main.py test --aggressive    # More opportunities, higher risk
+python3 main.py test --conservative  # Safer picks, fewer alerts
+
+# Start continuous 24/7 scanning
+python3 main.py
+
+# Start with specific risk profile
+python3 main.py --aggressive
 ```
+
+## 🛡️ Security Features
+
+GemFinder now includes advanced rug pull detection:
+
+### Multi-Layer Security Analysis
+- **Contract Verification**: Checks if smart contract is verified
+- **Liquidity Analysis**: Evaluates liquidity ratios and lock status
+- **Trading Pattern Detection**: Identifies pump & dump schemes
+- **Name & Symbol Analysis**: Detects suspicious naming patterns
+- **Social Presence Verification**: Checks website and social media legitimacy
+- **Audit Information**: Recognizes tokens audited by reputable firms
+
+### Risk Levels
+- **SAFE** (80+ security score): Low risk, suitable for investment
+- **CAUTION** (60-79): Medium risk, do your own research
+- **HIGH RISK** (40-59): Only for experienced traders
+- **VERY HIGH RISK** (20-39): Avoid unless expert
+- **AVOID** (<20): Likely scam or rug pull
 
 ## 📊 Scoring Algorithm
 
@@ -67,17 +109,19 @@ The bot uses a weighted scoring system (0-100) based on:
 
 ```
 gemfounder/
-├── main.py              # Main bot orchestrator
-├── scanner.py           # Multi-blockchain token scanning
-├── filter.py            # Token filtering logic
-├── scoring.py           # Intelligent scoring system
-├── notifier.py          # Telegram notification system
-├── storage.py           # Local data persistence
-├── config.py            # Default configuration
-├── utils.py             # Utility functions
-├── requirements.txt     # Python dependencies
-├── config_template.py   # Configuration template
-└── setup.py            # Setup script
+├── main.py                 # Main bot orchestrator with 24/7 operation
+├── scanner.py              # Enhanced multi-blockchain token scanning
+├── filter.py               # Advanced token filtering logic
+├── scoring.py              # Intelligent scoring system
+├── notifier.py             # Enhanced Telegram notification system
+├── rug_detector.py         # Advanced rug pull detection module
+├── storage.py              # Local data persistence
+├── config.py               # Default configuration with risk profiles
+├── utils.py                # Utility functions
+├── telegram_setup.py       # Interactive Telegram bot setup script
+├── requirements.txt        # Enhanced Python dependencies
+├── config_template.py      # Configuration template
+└── setup.py               # Setup script
 ```
 
 ## ⚙️ Configuration Options
@@ -127,6 +171,16 @@ MIN_VOLUME_GROWTH = 30         # 30% growth requirement
 🔄 DEX: PancakeSwap
 💧 Liquidity: $45K
 📄 Contract: 0x8076...abc123
+
+🛡️ Security Analysis:
+🔒 Security Score: 85.2/100
+⚠️ Risk Level: SAFE
+💡 Recommendation: Low risk, suitable for investment
+
+✅ Legitimacy Factors:
+• Contract is verified
+• Good liquidity ratio: 18.4%
+• Has audit information
 
 🔗 Quick Links:
 [DexScreener](https://dexscreener.com/...)

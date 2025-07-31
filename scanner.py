@@ -578,6 +578,149 @@ class TokenScanner:
         logging.info(f"Total fetched {len(all_tokens)} tokens from DEX-specific sources")
         return all_tokens
     
+    def scan_new_listings(self) -> List[Dict]:
+        """Scan for newly listed tokens across multiple sources"""
+        all_tokens = []
+        
+        try:
+            # DexScreener new tokens endpoint
+            new_endpoints = [
+                f"{config.DEXSCREENER_API_URL}/tokens/new",
+                f"{config.DEXSCREENER_API_URL}/pairs/bsc/new",
+                f"{config.DEXSCREENER_API_URL}/pairs/ethereum/new",
+                f"{config.DEXSCREENER_API_URL}/pairs/polygon/new"
+            ]
+            
+            for endpoint in new_endpoints:
+                try:
+                    response = self.session.get(endpoint, timeout=config.REQUEST_TIMEOUT)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        tokens = []
+                        
+                        if 'pairs' in data:
+                            for pair in data['pairs'][:20]:  # Limit per endpoint
+                                token_data = self._parse_dexscreener_pair(pair)
+                                if token_data and self._is_potential_gem(token_data):
+                                    tokens.append(token_data)
+                        
+                        all_tokens.extend(tokens)
+                        logging.info(f"Found {len(tokens)} new tokens from {endpoint}")
+                    
+                    rate_limit_delay(0.5)
+                    
+                except Exception as e:
+                    logging.warning(f"Error scanning new listings from {endpoint}: {e}")
+                    continue
+            
+        except Exception as e:
+            logging.error(f"Error in scan_new_listings: {e}")
+        
+        return all_tokens
+    
+    def scan_microcap_gems(self) -> List[Dict]:
+        """Specialized scanning for micro-cap gems with high potential"""
+        all_tokens = []
+        
+        try:
+            # Search for tokens with specific characteristics
+            gem_search_terms = [
+                # DeFi focused
+                'defi', 'yield', 'farm', 'stake', 'protocol',
+                # Gaming/NFT focused
+                'game', 'nft', 'play', 'earn', 'meta',
+                # Utility focused
+                'dao', 'vote', 'gov', 'utility', 'token',
+                # Trending meme categories (careful filtering needed)
+                'ai', 'rwa', 'layer2', 'bridge'
+            ]
+            
+            for term in gem_search_terms[:5]:  # Limit to avoid rate limits
+                try:
+                    # Search DexScreener for these terms
+                    url = f"{config.DEXSCREENER_API_URL}/search/?q={term}&limit=15"
+                    response = self.session.get(url, timeout=config.REQUEST_TIMEOUT)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if 'pairs' in data:
+                            for pair in data['pairs']:
+                                token_data = self._parse_dexscreener_pair(pair)
+                                if token_data and self._is_microcap_gem(token_data):
+                                    all_tokens.append(token_data)
+                    
+                    rate_limit_delay(0.3)
+                    
+                except Exception as e:
+                    logging.warning(f"Error searching for {term}: {e}")
+                    continue
+            
+            # Also scan for tokens with high volume growth but low market cap
+            try:
+                volume_growth_endpoint = f"{config.DEXSCREENER_API_URL}/pairs/bsc/latest?sortBy=volumeGrowth"
+                response = self.session.get(volume_growth_endpoint, timeout=config.REQUEST_TIMEOUT)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'pairs' in data:
+                        for pair in data['pairs'][:20]:
+                            token_data = self._parse_dexscreener_pair(pair)
+                            if token_data and self._is_microcap_gem(token_data):
+                                all_tokens.append(token_data)
+                
+            except Exception as e:
+                logging.warning(f"Error scanning volume growth tokens: {e}")
+            
+        except Exception as e:
+            logging.error(f"Error in scan_microcap_gems: {e}")
+        
+        logging.info(f"Found {len(all_tokens)} potential microcap gems")
+        return all_tokens
+    
+    def _is_potential_gem(self, token: Dict) -> bool:
+        """Quick check if token has gem potential"""
+        try:
+            market_cap = token.get('market_cap', 0)
+            volume_24h = token.get('volume_24h', 0)
+            price_change_24h = token.get('price_change_24h', 0)
+            
+            # Basic criteria for gem potential
+            if 10000 <= market_cap <= 2000000:  # Between $10k and $2M
+                if volume_24h > 1000:  # At least $1k volume
+                    if price_change_24h > -50:  # Not crashing too hard
+                        return True
+            
+            # Also consider trending tokens with good metrics
+            if market_cap > 5000 and volume_24h > 5000:
+                if abs(price_change_24h) > 15:  # Some volatility indicates interest
+                    return True
+            
+            return False
+            
+        except Exception:
+            return False
+    
+    def _is_microcap_gem(self, token: Dict) -> bool:
+        """Check if token qualifies as a microcap gem"""
+        try:
+            market_cap = token.get('market_cap', 0)
+            volume_24h = token.get('volume_24h', 0)
+            liquidity_usd = token.get('liquidity_usd', 0)
+            price_change_24h = token.get('price_change_24h', 0)
+            
+            # Microcap criteria
+            if 5000 <= market_cap <= 500000:  # Between $5k and $500k
+                if volume_24h >= market_cap * 0.05:  # Volume at least 5% of market cap
+                    if liquidity_usd >= 2000:  # At least $2k liquidity
+                        if price_change_24h > -80:  # Not completely crashed
+                            return True
+            
+            return False
+            
+        except Exception:
+            return False
+    
     def _deduplicate_tokens(self, tokens: List[Dict]) -> List[Dict]:
         """Remove duplicate tokens based on contract address or symbol"""
         seen_addresses = set()

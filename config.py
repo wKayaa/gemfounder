@@ -29,21 +29,24 @@ RISK_PROFILES = {
         'max_market_cap': 10000000,    # $10M max
         'min_volume_growth': 10,       # 10% growth
         'score_threshold': 60,         # Higher threshold
-        'max_tokens_per_scan': 3       # Fewer notifications
+        'max_tokens_per_scan': 3,      # Fewer notifications
+        'min_security_score': 80       # Higher security requirement
     },
     'balanced': {
         'min_market_cap': 100000,      # $100k min
         'max_market_cap': 2000000,     # $2M max
         'min_volume_growth': 15,       # 15% growth
         'score_threshold': 45,         # Default threshold
-        'max_tokens_per_scan': 5       # Moderate notifications
+        'max_tokens_per_scan': 5,      # Moderate notifications
+        'min_security_score': 60       # Balanced security requirement
     },
     'aggressive': {
         'min_market_cap': 20000,       # $20k min (high risk)
         'max_market_cap': 1000000,     # $1M max
         'min_volume_growth': 5,        # 5% growth (lower barrier)
         'score_threshold': 35,         # Lower threshold
-        'max_tokens_per_scan': 10      # More notifications
+        'max_tokens_per_scan': 10,     # More notifications
+        'min_security_score': 40       # Lower security requirement for more opportunities
     }
 }
 
@@ -93,3 +96,11 @@ WHALE_THRESHOLD = 50000  # $50k+ transactions considered whale activity
 WHALE_ADDRESSES = [
     # Known whale addresses can be added here
 ]
+
+# Import local configuration if available
+try:
+    from config_local import *
+    print("✅ Loaded local configuration")
+except ImportError:
+    print("⚠️  No local configuration found. Using default settings.")
+    pass

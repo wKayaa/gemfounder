@@ -15,6 +15,7 @@ from filter import TokenFilter
 from scoring import TokenScorer
 from notifier import TelegramNotifier
 from storage import TokenStorage
+from rug_detector import RugPullDetector
 
 class GemFinderBot:
     """Main bot orchestrator"""
@@ -26,9 +27,12 @@ class GemFinderBot:
         self.scorer = TokenScorer()
         self.notifier = TelegramNotifier()
         self.storage = TokenStorage(config.NOTIFIED_TOKENS_FILE)
+        self.rug_detector = RugPullDetector()
         self.running = False
+        self.consecutive_errors = 0
+        self.max_consecutive_errors = 5
         
-        self.logger.info("GemFinder Bot initialized")
+        self.logger.info("GemFinder Bot initialized with rug detection")
     
     def start(self):
         """Start the bot main loop"""
@@ -50,33 +54,62 @@ class GemFinderBot:
                 self.logger.info(f"Starting scan #{scan_count}")
                 
                 scan_start_time = time.time()
-                scan_results = self.run_scan_cycle()
-                scan_duration = time.time() - scan_start_time
-                
-                # Log scan results
-                self.logger.info(f"Scan #{scan_count} completed in {scan_duration:.1f}s")
-                self.logger.info(f"Results: {scan_results}")
-                
-                # Store scan record
-                scan_summary = {
-                    'tokens_scanned': scan_results.get('tokens_scanned', 0),
-                    'tokens_filtered': scan_results.get('tokens_filtered', 0),
-                    'notifications_sent': scan_results.get('notifications_sent', 0),
-                    'scan_duration': scan_duration
-                }
-                self.storage.add_scan_record(scan_summary)
+                try:
+                    scan_results = self.run_scan_cycle()
+                    scan_duration = time.time() - scan_start_time
+                    
+                    # Reset error counter on successful scan
+                    self.consecutive_errors = 0
+                    
+                    # Log scan results
+                    self.logger.info(f"Scan #{scan_count} completed in {scan_duration:.1f}s")
+                    self.logger.info(f"Results: {scan_results}")
+                    
+                    # Store scan record
+                    scan_summary = {
+                        'tokens_scanned': scan_results.get('tokens_scanned', 0),
+                        'tokens_filtered': scan_results.get('tokens_filtered', 0),
+                        'tokens_secure': scan_results.get('tokens_secure', 0),
+                        'notifications_sent': scan_results.get('notifications_sent', 0),
+                        'scan_duration': scan_duration
+                    }
+                    self.storage.add_scan_record(scan_summary)
+                    
+                except Exception as e:
+                    self.consecutive_errors += 1
+                    scan_duration = time.time() - scan_start_time
+                    self.logger.error(f"Scan #{scan_count} failed after {scan_duration:.1f}s: {e}")
+                    
+                    # If too many consecutive errors, take a longer break
+                    if self.consecutive_errors >= self.max_consecutive_errors:
+                        self.logger.error(f"Too many consecutive errors ({self.consecutive_errors}), taking extended break...")
+                        self.notifier.send_error_alert(f"Bot experiencing issues after {self.consecutive_errors} failed scans")
+                        time.sleep(config.SCAN_INTERVAL_SECONDS * 3)  # Extended break
+                        self.consecutive_errors = 0  # Reset counter
+                        continue
+                    
+                    # Short break on error
+                    time.sleep(30)
+                    continue
                 
                 # Send summary every 10 scans
                 if scan_count % 10 == 0:
-                    self.send_summary_report(scan_summary)
+                    try:
+                        self.send_summary_report(scan_summary)
+                    except Exception as e:
+                        self.logger.error(f"Error sending summary report: {e}")
                 
                 # Clean up old notifications periodically
                 if scan_count % 50 == 0:
-                    self.storage.cleanup_old_notifications()
+                    try:
+                        self.storage.cleanup_old_notifications()
+                    except Exception as e:
+                        self.logger.error(f"Error cleaning up old notifications: {e}")
                 
-                # Wait before next scan
-                self.logger.info(f"Waiting {config.SCAN_INTERVAL_SECONDS}s before next scan...")
-                time.sleep(config.SCAN_INTERVAL_SECONDS)
+                # Adaptive wait time based on recent performance
+                wait_time = self._calculate_adaptive_wait_time(scan_duration)
+                self.logger.info(f"Waiting {wait_time}s before next scan...")
+                time.sleep(wait_time)
                 
         except KeyboardInterrupt:
             self.logger.info("Bot stopped by user")
@@ -116,23 +149,59 @@ class GemFinderBot:
                     'notifications_sent': 0
                 }
             
-            # Step 3: Score tokens
-            self.logger.info(f"Scoring {len(filtered_tokens)} filtered tokens...")
-            scored_tokens = self.scorer.score_tokens(filtered_tokens, risk_profile['score_threshold'])
+            # Step 3: Apply rug detection and security analysis
+            self.logger.info(f"Applying security analysis to {len(filtered_tokens)} tokens...")
+            secure_tokens = []
+            for token in filtered_tokens:
+                try:
+                    # Use risk profile to determine minimum security score
+                    min_security_score = risk_profile.get('min_security_score', 60)
+                    
+                    if self.rug_detector.is_token_safe(token, min_security_score):
+                        # Add security analysis to token data
+                        security_analysis = self.rug_detector.analyze_token_security(token)
+                        token['security_analysis'] = security_analysis
+                        secure_tokens.append(token)
+                    else:
+                        self.logger.debug(f"Token {token.get('symbol')} failed security analysis")
+                
+                except Exception as e:
+                    self.logger.warning(f"Error analyzing token {token.get('symbol', 'unknown')}: {e}")
+                    # If analysis fails, include token but mark as unanalyzed
+                    token['security_analysis'] = {
+                        'security_score': 50,
+                        'risk_level': 'UNKNOWN',
+                        'recommendation': 'CAUTION - Analysis failed'
+                    }
+                    secure_tokens.append(token)
+            
+            if not secure_tokens:
+                self.logger.info("No tokens passed security analysis")
+                return {
+                    'tokens_scanned': len(tokens),
+                    'tokens_filtered': len(filtered_tokens),
+                    'tokens_secure': 0,
+                    'notifications_sent': 0
+                }
+            
+            # Step 4: Score tokens
+            self.logger.info(f"Scoring {len(secure_tokens)} secure tokens...")
+            scored_tokens = self.scorer.score_tokens(secure_tokens, risk_profile['score_threshold'])
             
             if not scored_tokens:
                 self.logger.info(f"No tokens passed scoring threshold of {risk_profile['score_threshold']}")
                 return {
                     'tokens_scanned': len(tokens),
                     'tokens_filtered': len(filtered_tokens),
+                    'tokens_secure': len(secure_tokens),
                     'notifications_sent': 0
                 }
             
-            # Step 4: Limit notifications based on risk profile
+            # Step 5: Limit notifications based on risk profile
             max_notifications = risk_profile.get('max_tokens_per_scan', 5)
             tokens_to_notify = scored_tokens[:max_notifications]
             
-            # Step 5: Send notifications for new tokens
+            # Step 6: Send notifications for new tokens
             notifications_sent = 0
             for token in tokens_to_notify:
                 if self.should_notify_token(token):
@@ -142,6 +211,7 @@ class GemFinderBot:
             return {
                 'tokens_scanned': len(tokens),
                 'tokens_filtered': len(filtered_tokens),
+                'tokens_secure': len(secure_tokens),
                 'high_scoring_tokens': len(scored_tokens),
                 'notifications_sent': notifications_sent,
                 'risk_profile': config.ACTIVE_RISK_PROFILE,
@@ -206,6 +276,20 @@ class GemFinderBot:
         except Exception as e:
             self.logger.error(f"Error sending token notification: {e}")
             return False
+    
+    def _calculate_adaptive_wait_time(self, last_scan_duration: float) -> int:
+        """Calculate adaptive wait time based on scan performance"""
+        base_wait = config.SCAN_INTERVAL_SECONDS
+        
+        # If scan took too long, wait longer
+        if last_scan_duration > 120:  # 2 minutes
+            return base_wait + 60
+        elif last_scan_duration > 60:  # 1 minute
+            return base_wait + 30
+        elif last_scan_duration < 10:  # Very fast scan, might be rate limited
+            return base_wait + 30
+        
+        return base_wait
     
     def send_summary_report(self, scan_summary: Dict):
         """Send periodic summary report"""

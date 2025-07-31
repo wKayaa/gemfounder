@@ -13,6 +13,7 @@ from filter import TokenFilter
 from scoring import TokenScorer
 from notifier import TelegramNotifier
 from storage import TokenStorage
+from rug_detector import RugPullDetector
 
 def test_utils():
     """Test utility functions"""
@@ -92,7 +93,7 @@ def test_filter():
     
     # Test token that should fail (market cap too high)
     bad_token = {
-        "market_cap": 500000,
+        "market_cap": 5000000,  # Much higher market cap to ensure it fails
         "volume_24h": 50000,
         "price_change_1h": 35,
         "symbol": "BAD",
@@ -168,6 +169,78 @@ def test_notifier():
     
     print("✅ Notifier test passed")
 
+def test_rug_detector():
+    """Test rug pull detection functionality"""
+    print("🧪 Testing Rug Detector...")
+    
+    detector = RugPullDetector()
+    
+    # Test safe token
+    safe_token = {
+        "name": "Ethereum",
+        "symbol": "ETH",
+        "contract_address": "0x123abc",
+        "market_cap": 500000,
+        "volume_24h": 100000,
+        "liquidity_usd": 50000,
+        "price_change_24h": 5.5,
+        "verified": True,
+        "liquidity_locked": True,
+        "website": "https://ethereum.org",
+        "audit_info": "Audited by ConsenSys"
+    }
+    
+    analysis = detector.analyze_token_security(safe_token)
+    assert analysis['security_score'] > 60
+    assert not analysis['is_likely_rug']
+    assert analysis['is_safe_to_trade']
+    
+    # Test risky token
+    risky_token = {
+        "name": "MoonSafeBaby",
+        "symbol": "SCAM",
+        "market_cap": 10000,
+        "volume_24h": 200000,  # Suspiciously high volume
+        "liquidity_usd": 500,  # Very low liquidity
+        "price_change_24h": 2000,  # Extreme pump
+        "verified": False,
+        "liquidity_locked": False
+    }
+    
+    analysis = detector.analyze_token_security(risky_token)
+    assert analysis['security_score'] < 50
+    assert analysis['is_likely_rug'] or not analysis['is_safe_to_trade']
+    
+    print(f"   Safe token scored: {analysis['security_score']:.1f}/100")
+    print("✅ Rug Detector test passed")
+
+def test_enhanced_scanner():
+    """Test enhanced scanner functionality"""
+    print("🧪 Testing Enhanced Scanner...")
+    
+    scanner = TokenScanner()
+    
+    # Test potential gem detection
+    gem_token = {
+        "market_cap": 150000,
+        "volume_24h": 25000,
+        "price_change_24h": 45
+    }
+    
+    assert scanner._is_potential_gem(gem_token)
+    
+    # Test microcap gem detection
+    microcap_token = {
+        "market_cap": 50000,
+        "volume_24h": 5000,
+        "liquidity_usd": 3000,
+        "price_change_24h": 15
+    }
+    
+    assert scanner._is_microcap_gem(microcap_token)
+    
+    print("✅ Enhanced Scanner test passed")
+
 def run_all_tests():
     """Run all tests"""
     print("🚀 Starting GemFinder Bot Tests")
@@ -183,6 +256,8 @@ def run_all_tests():
         test_filter()
         test_scorer()
         test_notifier()
+        test_rug_detector()
+        test_enhanced_scanner()
         
         print("\n🎉 All tests passed!")
         print("The bot components are working correctly.")
