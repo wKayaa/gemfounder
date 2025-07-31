@@ -38,10 +38,15 @@ class TokenScanner:
                     data = response.json()
                     tokens = []
                     
+                    # Add null safety check
+                    if not data:
+                        logging.warning(f"DexScreener endpoint {endpoint} returned empty data")
+                        continue
+                    
                     # Handle different response structures
-                    if 'pairs' in data:
+                    if 'pairs' in data and data['pairs']:
                         pairs = data['pairs']
-                    elif 'tokens' in data:
+                    elif 'tokens' in data and data['tokens']:
                         pairs = data['tokens']
                     elif isinstance(data, list):
                         pairs = data
@@ -74,7 +79,7 @@ class TokenScanner:
                     
                     if response.status_code == 200:
                         data = response.json()
-                        if 'pairs' in data:
+                        if data and 'pairs' in data and data['pairs']:
                             for pair in data['pairs'][:25]:
                                 token_data = self._parse_dexscreener_pair(pair)
                                 if token_data:
@@ -144,10 +149,16 @@ class TokenScanner:
                     data = response.json()
                     tokens = []
                     
+                    # Add null safety check
+                    if not data or not isinstance(data, list):
+                        logging.warning(f"CoinGecko {config_item['name']} returned invalid data format")
+                        continue
+                    
                     for coin in data:
-                        token_data = self._parse_coingecko_coin(coin)
-                        if token_data:
-                            tokens.append(token_data)
+                        if coin:  # Check individual coin data is not None
+                            token_data = self._parse_coingecko_coin(coin)
+                            if token_data:
+                                tokens.append(token_data)
                     
                     all_tokens.extend(tokens)
                     logging.info(f"Fetched {len(tokens)} tokens from CoinGecko ({config_item['name']})")
@@ -167,20 +178,21 @@ class TokenScanner:
             
             if response.status_code == 200:
                 data = response.json()
-                if 'coins' in data:
+                if data and 'coins' in data and data['coins']:
                     trending_tokens = []
                     for coin in data['coins'][:20]:  # Top 20 trending
                         # Get detailed info for trending coins
-                        coin_id = coin.get('item', {}).get('id', '')
+                        coin_id = coin.get('item', {}).get('id', '') if coin.get('item') else ''
                         if coin_id:
                             try:
                                 detail_url = f"{config.COINGECKO_API_URL}/coins/{coin_id}"
                                 detail_response = self.session.get(detail_url, timeout=config.REQUEST_TIMEOUT)
                                 if detail_response.status_code == 200:
                                     detail_data = detail_response.json()
-                                    token_data = self._parse_coingecko_detailed_coin(detail_data)
-                                    if token_data:
-                                        trending_tokens.append(token_data)
+                                    if detail_data:  # Add null check
+                                        token_data = self._parse_coingecko_detailed_coin(detail_data)
+                                        if token_data:
+                                            trending_tokens.append(token_data)
                                 rate_limit_delay(0.5)
                             except Exception:
                                 continue
@@ -231,6 +243,9 @@ class TokenScanner:
     def _parse_coingecko_detailed_coin(self, coin: Dict) -> Optional[Dict]:
         """Parse detailed CoinGecko coin data into standardized format"""
         try:
+            if not coin:
+                return None
+                
             market_data = coin.get('market_data', {})
             current_price = market_data.get('current_price', {}).get('usd')
             market_cap = market_data.get('market_cap', {}).get('usd')
@@ -331,60 +346,12 @@ class TokenScanner:
             logging.error(f"Error parsing DexScreener pair: {e}")
             return None
     
-    def _parse_coingecko_detailed_coin(self, coin: Dict) -> Optional[Dict]:
-        """Parse detailed CoinGecko coin data into standardized format"""
-        try:
-            market_data = coin.get('market_data', {})
-            current_price = market_data.get('current_price', {}).get('usd')
-            market_cap = market_data.get('market_cap', {}).get('usd')
-            
-            if not market_cap or not current_price:
-                return None
-            
-            # Basic market cap filter
-            if market_cap < config.MIN_MARKET_CAP or market_cap > config.MAX_MARKET_CAP:
-                return None
-            
-            token_data = {
-                'source': 'coingecko_detailed',
-                'contract_address': '',  # Try to get from platforms
-                'name': coin.get('name', ''),
-                'symbol': coin.get('symbol', '').upper(),
-                'coingecko_id': coin.get('id', ''),
-                'price_usd': current_price,
-                'market_cap': market_cap,
-                'volume_24h': market_data.get('total_volume', {}).get('usd', 0) or 0,
-                'price_change_1h': market_data.get('price_change_percentage_1h_in_currency', {}).get('usd', 0) or 0,
-                'price_change_24h': market_data.get('price_change_percentage_24h', 0) or 0,
-                'price_change_7d': market_data.get('price_change_percentage_7d', 0) or 0,
-                'market_cap_rank': coin.get('market_cap_rank'),
-                'image': coin.get('image', {}).get('large', ''),
-                'description': coin.get('description', {}).get('en', '')[:200] if coin.get('description', {}).get('en') else '',
-                'homepage': coin.get('links', {}).get('homepage', [''])[0] if coin.get('links', {}).get('homepage') else '',
-                'twitter': coin.get('links', {}).get('twitter_screen_name', ''),
-                'telegram': coin.get('links', {}).get('telegram_channel_identifier', ''),
-                'ath_change_percentage': market_data.get('ath_change_percentage', {}).get('usd', 0),
-                'total_supply': market_data.get('total_supply', 0),
-                'circulating_supply': market_data.get('circulating_supply', 0),
-                'scan_timestamp': datetime.now().isoformat()
-            }
-            
-            # Try to extract contract addresses from platforms
-            platforms = coin.get('platforms', {})
-            if platforms:
-                for platform, address in platforms.items():
-                    if address and address != '':
-                        token_data['contract_address'] = address
-                        token_data['platform'] = platform
-                        break
-            
-            return token_data
-            
-        except Exception as e:
-            logging.error(f"Error parsing detailed CoinGecko coin: {e}")
-            return None
+    def _parse_coingecko_coin(self, coin: Dict) -> Optional[Dict]:
         """Parse CoinGecko coin data into standardized format"""
         try:
+            if not coin:
+                return None
+                
             market_cap = coin.get('market_cap')
             current_price = coin.get('current_price')
             
@@ -537,7 +504,12 @@ class TokenScanner:
                     data = response.json()
                     tokens = []
                     
-                    if 'pairs' in data:
+                    # Add null safety check
+                    if not data:
+                        logging.warning(f"DEX endpoint {endpoint} returned empty data")
+                        continue
+                    
+                    if 'pairs' in data and data['pairs']:
                         for pair in data['pairs'][:30]:  # Limit per endpoint
                             token_data = self._parse_dexscreener_pair(pair)
                             if token_data:
@@ -563,7 +535,7 @@ class TokenScanner:
                     
                     if response.status_code == 200:
                         data = response.json()
-                        if 'pairs' in data:
+                        if data and 'pairs' in data and data['pairs']:
                             for pair in data['pairs'][:10]:
                                 token_data = self._parse_dexscreener_pair(pair)
                                 if token_data:
